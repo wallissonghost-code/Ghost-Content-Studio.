@@ -3,7 +3,14 @@
 import { useMemo, useState } from 'react';
 
 type Narration = 'none' | 'male' | 'female';
-type Scene = { title: string; text: string; seconds: number; imageUrl?: string };
+type Scene = { title: string; text: string; seconds: number; imageUrl?: string; credit?: string; sourceUrl?: string };
+
+type MediaResult = {
+  index: number;
+  imageUrl?: string;
+  credit?: string;
+  sourceUrl?: string;
+};
 
 export default function Home() {
   const [niche, setNiche] = useState('Mistérios');
@@ -15,24 +22,69 @@ export default function Home() {
   const [scenes, setScenes] = useState<Scene[]>([]);
   const [status, setStatus] = useState('Pronto para criar.');
   const [rendering, setRendering] = useState(false);
+  const [searchingMedia, setSearchingMedia] = useState(false);
 
   const hook = useMemo(() => topic.trim() || 'Escolha um tema para o vídeo', [topic]);
 
-  function generate() {
-    const blocks: Scene[] = [
+  function buildScenes() {
+    return [
       { title: 'Gancho', text: `Você teria coragem de descobrir o que aconteceu? ${topic}.`, seconds: 3 },
       { title: 'Contexto', text: `Tudo começa com um detalhe aparentemente comum dentro do universo de ${niche.toLowerCase()}.`, seconds: Math.max(7, Math.round(duration * .2)) },
       { title: 'Escalada', text: 'A partir daí, os sinais ficam cada vez mais estranhos e o clima muda completamente.', seconds: Math.max(9, Math.round(duration * .28)) },
       { title: 'Revelação', text: 'No momento decisivo, surge a informação que muda a interpretação de toda a história.', seconds: Math.max(8, Math.round(duration * .25)) },
       { title: 'CTA', text: 'Você continuaria investigando? Comenta o que faria.', seconds: 5 },
-    ];
+    ] as Scene[];
+  }
+
+  async function generate() {
+    const blocks = buildScenes();
     setScenes(blocks);
     setScript(blocks.map((s) => `${s.title}: ${s.text}`).join('\n\n'));
-    setStatus('Roteiro criado. Adicione imagens às cenas se quiser e renderize o MP4.');
+    setStatus('Roteiro criado. Buscando mídia automática para cada cena...');
+    await searchMedia(blocks);
   }
 
   function updateSceneImage(index: number, imageUrl: string) {
     setScenes((current) => current.map((scene, sceneIndex) => sceneIndex === index ? { ...scene, imageUrl } : scene));
+  }
+
+  async function searchMedia(targetScenes = scenes) {
+    if (!targetScenes.length) {
+      setStatus('Gere o roteiro antes de buscar mídia.');
+      return;
+    }
+
+    setSearchingMedia(true);
+    setStatus('Buscando imagens verticais no Pexels para cada cena...');
+
+    try {
+      const response = await fetch('/api/media/search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ topic, scenes: targetScenes }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ error: 'Falha ao buscar mídia.' }));
+        throw new Error(error.error || 'Falha ao buscar mídia.');
+      }
+
+      const data = await response.json() as { results?: MediaResult[] };
+      const results = Array.isArray(data.results) ? data.results : [];
+
+      setScenes((current) => current.map((scene, index) => {
+        const media = results.find((item) => item.index === index);
+        if (!media?.imageUrl) return scene;
+        return { ...scene, imageUrl: media.imageUrl, credit: media.credit, sourceUrl: media.sourceUrl };
+      }));
+
+      const filled = results.filter((item) => item.imageUrl).length;
+      setStatus(`Mídia automática concluída: ${filled}/${targetScenes.length} cenas preenchidas.`);
+    } catch (error) {
+      setStatus(error instanceof Error ? `${error.message} Você ainda pode colar URLs manualmente.` : 'Falha ao buscar mídia automática.');
+    } finally {
+      setSearchingMedia(false);
+    }
   }
 
   async function connectTikTok() {
@@ -103,16 +155,17 @@ export default function Home() {
             <div className="field full"><label>Tema</label><input value={topic} onChange={(e)=>setTopic(e.target.value)} placeholder="Digite o assunto do vídeo" /></div>
             <div className="field"><label>Duração</label><select value={duration} onChange={(e)=>setDuration(Number(e.target.value))}><option value={30}>30 segundos</option><option value={45}>45 segundos</option><option value={60}>60 segundos</option><option value={90}>90 segundos</option></select></div>
             <div className="field"><label>Narração</label><select value={narration} onChange={(e)=>setNarration(e.target.value as Narration)}><option value="none">Somente legenda</option><option value="male">Masculina natural</option><option value="female">Feminina natural</option></select></div>
-            <div className="actions"><button className="btn primary" onClick={generate}>Gerar roteiro</button><button className="btn secondary" onClick={connectTikTok}>Conectar TikTok</button></div>
+            <div className="actions"><button className="btn primary" onClick={generate} disabled={searchingMedia}>{searchingMedia ? 'Buscando mídia…' : 'Gerar vídeo base'}</button><button className="btn secondary" onClick={()=>searchMedia()} disabled={searchingMedia || !scenes.length}>Trocar mídia automática</button><button className="btn secondary" onClick={connectTikTok}>Conectar TikTok</button></div>
             <div className="field full"><label>Roteiro</label><textarea value={script} onChange={(e)=>setScript(e.target.value)} placeholder="O roteiro aparecerá aqui..." /></div>
           </div>
           <div className="status">{status}</div>
-          <div className="timeline">{scenes.map((scene,i)=><div className="scene" key={`${scene.title}-${i}`}><strong>{String(i+1).padStart(2,'0')} · {scene.title}</strong><div>{scene.text}</div><small>{scene.seconds}s · {tone}</small><div className="field" style={{marginTop:10}}><label>Imagem da cena · URL HTTPS opcional</label><input value={scene.imageUrl || ''} onChange={(e)=>updateSceneImage(i,e.target.value)} placeholder="https://.../imagem.jpg" /></div></div>)}</div>
+          <div className="timeline">{scenes.map((scene,i)=><div className="scene" key={`${scene.title}-${i}`}><strong>{String(i+1).padStart(2,'0')} · {scene.title}</strong><div>{scene.text}</div><small>{scene.seconds}s · {tone}</small>{scene.imageUrl ? <div style={{marginTop:10}}><img src={scene.imageUrl} alt={scene.title} style={{width:'100%',maxHeight:220,objectFit:'cover',borderRadius:12}} />{scene.credit ? <small style={{display:'block',marginTop:6}}>{scene.credit}</small> : null}</div> : null}<div className="field" style={{marginTop:10}}><label>Imagem da cena · pode substituir manualmente</label><input value={scene.imageUrl || ''} onChange={(e)=>updateSceneImage(i,e.target.value)} placeholder="https://.../imagem.jpg" /></div></div>)}</div>
+          <div className="muted" style={{marginTop:14}}>Fotos fornecidas pelo Pexels quando a busca automática estiver ativa.</div>
         </div>
 
         <aside className="card">
           <h2>Preview</h2><div className="muted">Prévia conceitual do vídeo vertical.</div>
-          <div className="video"><div className="caption">{hook}</div></div>
+          <div className="video" style={scenes[0]?.imageUrl ? {backgroundImage:`linear-gradient(rgba(0,0,0,.18),rgba(0,0,0,.55)),url(${scenes[0].imageUrl})`,backgroundSize:'cover',backgroundPosition:'center'} : undefined}><div className="caption">{hook}</div></div>
           <button className="btn secondary" style={{width:'100%'}} onClick={renderVideo} disabled={rendering}>{rendering ? 'Renderizando…' : 'Renderizar MP4'}</button>
         </aside>
       </section>
