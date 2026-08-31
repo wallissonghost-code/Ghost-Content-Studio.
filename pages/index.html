@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Ghost Content Studio</title>
   <style>
-    *{box-sizing:border-box}body{margin:0;font-family:Inter,Arial,sans-serif;background:#0b0c10;color:#f4f4f5}.shell{max-width:1180px;margin:auto;padding:28px}.top{display:flex;justify-content:space-between;gap:16px;align-items:center;margin-bottom:24px}.brand{font-weight:800;letter-spacing:.08em}.muted{color:#a1a1aa}.grid{display:grid;grid-template-columns:1.5fr .7fr;gap:20px}.card{background:#14161c;border:1px solid #272a33;border-radius:20px;padding:20px;box-shadow:0 20px 50px #0005}.form{display:grid;grid-template-columns:1fr 1fr;gap:14px}.full{grid-column:1/-1}label{display:block;font-size:12px;color:#a1a1aa;margin-bottom:6px}input,select,textarea{width:100%;background:#0f1116;border:1px solid #303440;color:white;border-radius:12px;padding:12px}textarea{min-height:180px}.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}.btn{border:0;border-radius:12px;padding:12px 16px;font-weight:700;cursor:pointer}.primary{background:white;color:#111}.secondary{background:#242832;color:white}.status{margin-top:14px;padding:12px;border-radius:12px;background:#101218;color:#cbd5e1}.scene{padding:14px 0;border-top:1px solid #282b33}.video{aspect-ratio:9/16;max-height:620px;border-radius:18px;background:radial-gradient(circle at 50% 20%,#34374a,#12141a 60%,#090a0d);display:flex;align-items:flex-end;padding:28px;overflow:hidden}.caption{font-size:24px;font-weight:800;text-shadow:0 2px 20px #000}.pill{padding:7px 10px;border-radius:999px;background:#1f2430;font-size:12px}.ok{background:#14351f;color:#86efac}@media(max-width:850px){.grid{grid-template-columns:1fr}.form{grid-template-columns:1fr}.full{grid-column:auto}.shell{padding:16px}}
+    *{box-sizing:border-box}body{margin:0;font-family:Inter,Arial,sans-serif;background:#0b0c10;color:#f4f4f5}.shell{max-width:1180px;margin:auto;padding:28px}.top{display:flex;justify-content:space-between;gap:16px;align-items:center;margin-bottom:24px}.brand{font-weight:800;letter-spacing:.08em}.muted{color:#a1a1aa}.grid{display:grid;grid-template-columns:1.5fr .7fr;gap:20px}.card{background:#14161c;border:1px solid #272a33;border-radius:20px;padding:20px;box-shadow:0 20px 50px #0005}.form{display:grid;grid-template-columns:1fr 1fr;gap:14px}.full{grid-column:1/-1}label{display:block;font-size:12px;color:#a1a1aa;margin-bottom:6px}input,select,textarea{width:100%;background:#0f1116;border:1px solid #303440;color:white;border-radius:12px;padding:12px}textarea{min-height:180px}.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}.btn{border:0;border-radius:12px;padding:12px 16px;font-weight:700;cursor:pointer}.primary{background:white;color:#111}.secondary{background:#242832;color:white}.status{margin-top:14px;padding:12px;border-radius:12px;background:#101218;color:#cbd5e1}.scene{padding:14px 0;border-top:1px solid #282b33}.video{aspect-ratio:9/16;max-height:620px;border-radius:18px;background:radial-gradient(circle at 50% 20%,#34374a,#12141a 60%,#090a0d);display:flex;align-items:flex-end;padding:28px;overflow:hidden}.caption{font-size:24px;font-weight:800;text-shadow:0 2px 20px #000}.pill{padding:7px 10px;border-radius:999px;background:#1f2430;font-size:12px}.ok{background:#14351f;color:#86efac}.hint{font-size:12px;color:#a1a1aa;margin-top:8px;line-height:1.4}@media(max-width:850px){.grid{grid-template-columns:1fr}.form{grid-template-columns:1fr}.full{grid-column:auto}.shell{padding:16px}}
   </style>
 </head>
 <body>
@@ -22,8 +22,9 @@
           <div><label>Estilo</label><select id="tone"><option>Suspense</option><option>Rápido</option><option>Documental</option><option>Emocional</option><option>Impactante</option></select></div>
           <div class="full"><label>Tema</label><input id="topic" value="Uma gravação encontrada em uma casa abandonada" /></div>
           <div><label>Duração</label><select id="duration"><option value="30">30 segundos</option><option value="45" selected>45 segundos</option><option value="60">60 segundos</option><option value="90">90 segundos</option></select></div>
-          <div><label>Narração</label><select><option>Somente legenda</option><option>Masculina natural</option><option>Feminina natural</option></select></div>
-          <div class="full actions"><button class="btn primary" onclick="generate()">Gerar roteiro</button><button class="btn secondary" onclick="openActions()">Gerar MP4 no GitHub</button></div>
+          <div><label>Narração</label><select id="narration"><option>Somente legenda</option><option>Masculina natural</option><option>Feminina natural</option></select></div>
+          <div class="full actions"><button class="btn primary" onclick="generate()">Gerar roteiro</button><button class="btn secondary" onclick="requestVideo()">Gerar MP4 automático</button></div>
+          <div class="full hint">O botão prepara o pedido com tema e duração. No GitHub, basta confirmar a solicitação; o workflow começa sozinho.</div>
           <div class="full"><label>Roteiro</label><textarea id="script" placeholder="O roteiro aparecerá aqui..."></textarea></div>
         </div>
         <div class="status" id="status">Pronto para criar.</div>
@@ -53,15 +54,30 @@ function generate(){
  document.getElementById('script').value=scenes.map(s=>`${s[0]}: ${s[1]}`).join('\n\n');
  document.getElementById('preview').textContent=topic;
  document.getElementById('timeline').innerHTML=scenes.map((s,i)=>`<div class="scene"><strong>${String(i+1).padStart(2,'0')} · ${s[0]}</strong><div>${s[1]}</div><small class="muted">${s[2]}s · ${tone}</small></div>`).join('');
- document.getElementById('status').textContent='Roteiro criado. Clique em “Gerar MP4 no GitHub” para renderizar.';
+ document.getElementById('status').textContent='Roteiro criado. Clique em “Gerar MP4 automático”.';
 }
-function openActions(){
+function requestVideo(){
  const topic=document.getElementById('topic').value.trim();
+ const duration=document.getElementById('duration').value;
+ const niche=document.getElementById('niche').value;
+ const tone=document.getElementById('tone').value;
+ const narration=document.getElementById('narration').value;
+ if(!topic){document.getElementById('status').textContent='Informe um tema antes de gerar o vídeo.';return;}
+ const title=`[VIDEO] ${topic.slice(0,80)}`;
+ const body=[
+  'GHOST_VIDEO_REQUEST',
+  `TOPIC: ${topic.replace(/\r?\n/g,' ')}`,
+  `DURATION: ${duration}`,
+  `NICHE: ${niche}`,
+  `STYLE: ${tone}`,
+  `NARRATION: ${narration}`
+ ].join('\n');
+ const url=`${repo}/issues/new?title=${encodeURIComponent(title)}&body=${encodeURIComponent(body)}`;
  localStorage.setItem('ghost-topic',topic);
- document.getElementById('status').textContent='Abrindo o workflow do GitHub Actions. Use Run workflow para gerar o MP4.';
- window.open(repo+'/actions/workflows/generate-video.yml','_blank');
+ document.getElementById('status').textContent='Pedido preparado. Confirme a criação no GitHub e o vídeo será gerado automaticamente.';
+ window.open(url,'_blank');
 }
-function openLatest(){window.open(repo+'/actions','_blank')}
+function openLatest(){window.open(repo+'/actions/workflows/generate-video.yml','_blank')}
 const saved=localStorage.getItem('ghost-topic');if(saved)document.getElementById('topic').value=saved;
 generate();
 </script>
