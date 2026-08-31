@@ -1,15 +1,17 @@
 name: Gerar video faceless
 
 on:
+  schedule:
+    - cron: '0 12 * * *'
   workflow_dispatch:
     inputs:
       topic:
         description: Tema do video
-        required: true
+        required: false
         default: Uma gravacao encontrada em uma casa abandonada
       duration:
         description: Duracao aproximada em segundos
-        required: true
+        required: false
         default: '45'
 
 jobs:
@@ -17,8 +19,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
-      TOPIC: ${{ github.event.inputs.topic }}
-      DURATION: ${{ github.event.inputs.duration }}
       PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
     steps:
       - name: Checkout
@@ -39,13 +39,49 @@ jobs:
             exit 1
           fi
 
+      - name: Choose automatic topic
+        shell: bash
+        run: |
+          MANUAL_TOPIC="${{ github.event.inputs.topic }}"
+          MANUAL_DURATION="${{ github.event.inputs.duration }}"
+
+          if [ -n "$MANUAL_TOPIC" ]; then
+            TOPIC="$MANUAL_TOPIC"
+          else
+            TOPICS=(
+              "5 curiosidades do espaco que parecem mentira"
+              "Misterios historicos que ainda nao foram explicados"
+              "Tecnologias que devem mudar nossa rotina"
+              "Curiosidades estranhas sobre o oceano"
+              "Lugares abandonados com historias impressionantes"
+              "Fatos sobre o corpo humano que pouca gente conhece"
+              "Descobertas arqueologicas surpreendentes"
+              "Fenomenos naturais raros registrados no mundo"
+              "Coisas comuns com origens inesperadas"
+              "Historias reais que parecem roteiro de filme"
+            )
+            INDEX=$(( GITHUB_RUN_NUMBER % ${#TOPICS[@]} ))
+            TOPIC="${TOPICS[$INDEX]}"
+          fi
+
+          if [ -n "$MANUAL_DURATION" ]; then
+            DURATION="$MANUAL_DURATION"
+          else
+            DURATION="45"
+          fi
+
+          echo "TOPIC=$TOPIC" >> "$GITHUB_ENV"
+          echo "DURATION=$DURATION" >> "$GITHUB_ENV"
+          echo "Tema selecionado: $TOPIC"
+          echo "Duracao: $DURATION segundos"
+
       - name: Generate video
         run: node scripts/github-generate.mjs
 
       - name: Upload MP4 artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ghost-content-video
+          name: ghost-content-video-${{ github.run_number }}
           path: output/ghost-content.mp4
           if-no-files-found: error
           retention-days: 7
