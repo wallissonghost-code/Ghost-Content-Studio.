@@ -43,36 +43,61 @@ async function searchImage(query, index) {
 
 const media = [];
 for (let i = 0; i < scenes.length; i++) {
-  try { media.push(await searchImage(scenes[i].query, i)); }
-  catch { media.push(null); }
+  try {
+    media.push(await searchImage(scenes[i].query, i));
+  } catch (error) {
+    console.warn(`Cena ${i + 1}: mídia indisponível, usando fundo padrão.`, error instanceof Error ? error.message : error);
+    media.push(null);
+  }
 }
 
-const args = ['-hide_banner','-loglevel','error'];
+const args = ['-hide_banner', '-loglevel', 'error'];
 for (let i = 0; i < scenes.length; i++) {
   const s = scenes[i];
-  if (media[i]) args.push('-loop','1','-t',String(s.seconds),'-i',media[i]);
-  else args.push('-f','lavfi','-t',String(s.seconds),'-i','color=c=#101014:s=1080x1920:r=30');
+  if (media[i]) args.push('-loop', '1', '-t', String(s.seconds), '-i', media[i]);
+  else args.push('-f', 'lavfi', '-t', String(s.seconds), '-i', 'color=c=#101014:s=1080x1920:r=30');
 }
 
 const filters = [];
 const labels = [];
 for (let i = 0; i < scenes.length; i++) {
-  const text = scenes[i].text.replaceAll('\\','\\\\').replaceAll(':','\\:').replaceAll("'","\\'").replaceAll('%','\\%').slice(0,180);
+  const text = scenes[i].text
+    .replaceAll('\\', '\\\\')
+    .replaceAll(':', '\\:')
+    .replaceAll("'", "\\'")
+    .replaceAll('%', '\\%')
+    .slice(0, 180);
+
+  const caption = `drawtext=text='${text}':fontcolor=white:fontsize=52:x=(w-text_w)/2:y=h*0.72-text_h/2:box=1:boxcolor=black@0.55:boxborderw=24`;
+
   if (media[i]) {
-    filters.push(`[${i}:v]scale=1200:-1,crop=1080:1920,zoompan=z='min(zoom+0.0008,1.08)':d=${scenes[i].seconds*30}:s=1080x1920:fps=30,drawtext=text='${text}':fontcolor=white:fontsize=52:x=(w-text_w)/2:y=h*0.72-text_h/2:box=1:boxcolor=black@0.55:boxborderw=24[v${i}]`);
+    filters.push(
+      `[${i}:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1,` +
+      `zoompan=z='min(zoom+0.0008,1.08)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=${scenes[i].seconds * 30}:s=1080x1920:fps=30,` +
+      `${caption}[v${i}]`,
+    );
   } else {
-    filters.push(`[${i}:v]scale=1080:1920,drawtext=text='${text}':fontcolor=white:fontsize=52:x=(w-text_w)/2:y=h*0.72-text_h/2:box=1:boxcolor=black@0.55:boxborderw=24[v${i}]`);
+    filters.push(`[${i}:v]scale=1080:1920,setsar=1,${caption}[v${i}]`);
   }
   labels.push(`[v${i}]`);
 }
 filters.push(`${labels.join('')}concat=n=${scenes.length}:v=1:a=0,format=yuv420p[outv]`);
 
-args.push('-filter_complex',filters.join(';'),'-map','[outv]','-c:v','libx264','-preset','veryfast','-crf','23','-movflags','+faststart','-t',String(total),'-y','output/ghost-content.mp4');
+args.push(
+  '-filter_complex', filters.join(';'),
+  '-map', '[outv]',
+  '-c:v', 'libx264',
+  '-preset', 'veryfast',
+  '-crf', '23',
+  '-movflags', '+faststart',
+  '-t', String(total),
+  '-y', 'output/ghost-content.mp4',
+);
 
-await new Promise((resolve,reject)=>{
-  const p = spawn('ffmpeg',args,{stdio:'inherit'});
-  p.on('close',code=>code===0?resolve():reject(new Error(`ffmpeg ${code}`)));
-  p.on('error',reject);
+await new Promise((resolve, reject) => {
+  const p = spawn('ffmpeg', args, { stdio: 'inherit' });
+  p.on('close', (code) => code === 0 ? resolve() : reject(new Error(`ffmpeg ${code}`)));
+  p.on('error', reject);
 });
 
 console.log('Gerado: output/ghost-content.mp4');
