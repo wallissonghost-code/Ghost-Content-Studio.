@@ -1,0 +1,51 @@
+name: Gerar video faceless
+
+on:
+  workflow_dispatch:
+    inputs:
+      topic:
+        description: Tema do video
+        required: true
+        default: Uma gravacao encontrada em uma casa abandonada
+      duration:
+        description: Duracao aproximada em segundos
+        required: true
+        default: '45'
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      TOPIC: ${{ github.event.inputs.topic }}
+      DURATION: ${{ github.event.inputs.duration }}
+      PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install FFmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
+      - name: Validate secret
+        run: |
+          if [ -z "$PEXELS_API_KEY" ]; then
+            echo "PEXELS_API_KEY nao configurada em Settings > Secrets and variables > Actions"
+            exit 1
+          fi
+
+      - name: Generate video
+        run: node scripts/github-generate.mjs
+
+      - name: Upload MP4 artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ghost-content-video
+          path: output/ghost-content.mp4
+          if-no-files-found: error
+          retention-days: 7
