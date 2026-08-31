@@ -13,6 +13,18 @@ on:
         description: Duracao aproximada em segundos
         required: false
         default: '45'
+      niche:
+        description: Nicho
+        required: false
+        default: Misterios
+      style:
+        description: Estilo
+        required: false
+        default: Suspense
+      narration:
+        description: Narracao
+        required: false
+        default: Somente legenda
   issues:
     types: [opened]
 
@@ -24,9 +36,12 @@ jobs:
   generate:
     if: github.event_name != 'issues' || startsWith(github.event.issue.title, '[VIDEO]')
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     env:
       PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      OPENAI_SCRIPT_MODEL: gpt-5.6-luna
+      OPENAI_TTS_MODEL: tts-1
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -39,11 +54,14 @@ jobs:
       - name: Install FFmpeg
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
 
-      - name: Validate secret
+      - name: Validate required secret
         run: |
           if [ -z "$PEXELS_API_KEY" ]; then
             echo "PEXELS_API_KEY nao configurada em Settings > Secrets and variables > Actions"
             exit 1
+          fi
+          if [ -z "$OPENAI_API_KEY" ]; then
+            echo "Aviso: OPENAI_API_KEY nao configurada. O video sera gerado com roteiro fallback e sem narracao por IA."
           fi
 
       - name: Resolve video request
@@ -53,13 +71,22 @@ jobs:
           ISSUE_BODY: ${{ github.event.issue.body }}
           MANUAL_TOPIC: ${{ github.event.inputs.topic }}
           MANUAL_DURATION: ${{ github.event.inputs.duration }}
+          MANUAL_NICHE: ${{ github.event.inputs.niche }}
+          MANUAL_STYLE: ${{ github.event.inputs.style }}
+          MANUAL_NARRATION: ${{ github.event.inputs.narration }}
         run: |
           if [ "$EVENT_NAME" = "issues" ]; then
             TOPIC=$(printf '%s\n' "$ISSUE_BODY" | sed -n 's/^TOPIC: //p' | head -n 1)
             DURATION=$(printf '%s\n' "$ISSUE_BODY" | sed -n 's/^DURATION: //p' | head -n 1)
+            NICHE=$(printf '%s\n' "$ISSUE_BODY" | sed -n 's/^NICHE: //p' | head -n 1)
+            STYLE=$(printf '%s\n' "$ISSUE_BODY" | sed -n 's/^STYLE: //p' | head -n 1)
+            NARRATION=$(printf '%s\n' "$ISSUE_BODY" | sed -n 's/^NARRATION: //p' | head -n 1)
           elif [ "$EVENT_NAME" = "workflow_dispatch" ]; then
             TOPIC="$MANUAL_TOPIC"
             DURATION="$MANUAL_DURATION"
+            NICHE="$MANUAL_NICHE"
+            STYLE="$MANUAL_STYLE"
+            NARRATION="$MANUAL_NARRATION"
           else
             TOPICS=(
               "5 curiosidades do espaco que parecem mentira"
@@ -76,11 +103,15 @@ jobs:
             INDEX=$(( GITHUB_RUN_NUMBER % ${#TOPICS[@]} ))
             TOPIC="${TOPICS[$INDEX]}"
             DURATION="45"
+            NICHE="Curiosidades"
+            STYLE="Impactante"
+            NARRATION="Somente legenda"
           fi
 
-          if [ -z "$TOPIC" ]; then
-            TOPIC="Uma gravacao encontrada em uma casa abandonada"
-          fi
+          if [ -z "$TOPIC" ]; then TOPIC="Uma gravacao encontrada em uma casa abandonada"; fi
+          if [ -z "$NICHE" ]; then NICHE="Misterios"; fi
+          if [ -z "$STYLE" ]; then STYLE="Suspense"; fi
+          if [ -z "$NARRATION" ]; then NARRATION="Somente legenda"; fi
 
           DURATION=$(printf '%s' "${DURATION:-45}" | tr -cd '0-9')
           if [ -z "$DURATION" ]; then DURATION=45; fi
@@ -92,19 +123,33 @@ jobs:
             echo "$TOPIC"
             echo 'EOF'
             echo "DURATION=$DURATION"
+            echo 'NICHE<<EOF'
+            echo "$NICHE"
+            echo 'EOF'
+            echo 'STYLE<<EOF'
+            echo "$STYLE"
+            echo 'EOF'
+            echo 'NARRATION<<EOF'
+            echo "$NARRATION"
+            echo 'EOF'
           } >> "$GITHUB_ENV"
 
           echo "Tema: $TOPIC"
-          echo "Duracao: $DURATION segundos"
+          echo "Duracao alvo: $DURATION segundos"
+          echo "Nicho: $NICHE"
+          echo "Estilo: $STYLE"
+          echo "Narracao: $NARRATION"
 
-      - name: Generate video
+      - name: Generate AI video
         run: node scripts/github-generate.mjs
 
-      - name: Upload MP4 artifact
+      - name: Upload video artifact
         uses: actions/upload-artifact@v4
         with:
           name: ghost-content-video-${{ github.run_number }}
-          path: output/ghost-content.mp4
+          path: |
+            output/ghost-content.mp4
+            output/metadata.json
           if-no-files-found: error
           retention-days: 7
 
@@ -118,7 +163,7 @@ jobs:
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: context.issue.number,
-              body: `✅ Vídeo gerado com sucesso.\n\nAbra a execução para baixar o MP4 em **Artifacts**:\n${runUrl}`
+              body: `✅ Vídeo gerado com sucesso.\n\nAbra a execução para baixar o MP4 e o roteiro final em **Artifacts**:\n${runUrl}`
             });
             await github.rest.issues.update({
               owner: context.repo.owner,
