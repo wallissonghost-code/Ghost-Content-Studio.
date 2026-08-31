@@ -12,6 +12,7 @@ export default function Home() {
   const [script, setScript] = useState('');
   const [scenes, setScenes] = useState<Scene[]>([]);
   const [status, setStatus] = useState('Pronto para criar.');
+  const [rendering, setRendering] = useState(false);
 
   const hook = useMemo(() => topic.trim() || 'Escolha um tema para o vídeo', [topic]);
 
@@ -19,18 +20,56 @@ export default function Home() {
     const blocks: Scene[] = [
       { title: 'Gancho', text: `Você teria coragem de descobrir o que aconteceu? ${topic}.`, seconds: 3 },
       { title: 'Contexto', text: `Tudo começa com um detalhe aparentemente comum dentro do universo de ${niche.toLowerCase()}.`, seconds: Math.max(7, Math.round(duration * .2)) },
-      { title: 'Escalada', text: `A partir daí, os sinais ficam cada vez mais estranhos e o clima muda completamente.`, seconds: Math.max(9, Math.round(duration * .28)) },
-      { title: 'Revelação', text: `No momento decisivo, surge a informação que muda a interpretação de toda a história.`, seconds: Math.max(8, Math.round(duration * .25)) },
+      { title: 'Escalada', text: 'A partir daí, os sinais ficam cada vez mais estranhos e o clima muda completamente.', seconds: Math.max(9, Math.round(duration * .28)) },
+      { title: 'Revelação', text: 'No momento decisivo, surge a informação que muda a interpretação de toda a história.', seconds: Math.max(8, Math.round(duration * .25)) },
       { title: 'CTA', text: 'Você continuaria investigando? Comenta o que faria.', seconds: 5 },
     ];
     setScenes(blocks);
     setScript(blocks.map((s) => `${s.title}: ${s.text}`).join('\n\n'));
-    setStatus('Roteiro criado. Próximo passo: narração + mídia + renderização 9:16.');
+    setStatus('Roteiro criado. Já pode renderizar o MP4.');
   }
 
   async function connectTikTok() {
     setStatus('Abrindo fluxo oficial de autorização do TikTok...');
     window.location.href = '/api/tiktok/auth';
+  }
+
+  async function renderVideo() {
+    if (!scenes.length) {
+      setStatus('Gere o roteiro antes de renderizar.');
+      return;
+    }
+
+    setRendering(true);
+    setStatus('Renderizando vídeo 1080×1920 com FFmpeg...');
+
+    try {
+      const response = await fetch('/api/render', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ topic, scenes }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ error: 'Falha na renderização.' }));
+        throw new Error(error.error || 'Falha na renderização.');
+      }
+
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = `ghost-content-${Date.now()}.mp4`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+      setStatus('MP4 renderizado com sucesso. Arquivo enviado para download.');
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : 'Falha ao renderizar o vídeo.');
+    } finally {
+      setRendering(false);
+    }
   }
 
   return (
@@ -51,7 +90,7 @@ export default function Home() {
             <div className="field"><label>Estilo</label><select value={tone} onChange={(e)=>setTone(e.target.value)}><option>Suspense</option><option>Rápido</option><option>Documental</option><option>Emocional</option><option>Impactante</option></select></div>
             <div className="field full"><label>Tema</label><input value={topic} onChange={(e)=>setTopic(e.target.value)} placeholder="Digite o assunto do vídeo" /></div>
             <div className="field"><label>Duração</label><select value={duration} onChange={(e)=>setDuration(Number(e.target.value))}><option value={30}>30 segundos</option><option value={45}>45 segundos</option><option value={60}>60 segundos</option><option value={90}>90 segundos</option></select></div>
-            <div className="field"><label>Narração</label><select defaultValue="Masculina natural"><option>Masculina natural</option><option>Feminina natural</option><option>Somente legenda</option></select></div>
+            <div className="field"><label>Narração</label><select defaultValue="Somente legenda"><option>Somente legenda</option><option disabled>Masculina natural · próxima etapa</option><option disabled>Feminina natural · próxima etapa</option></select></div>
             <div className="actions"><button className="btn primary" onClick={generate}>Gerar roteiro</button><button className="btn secondary" onClick={connectTikTok}>Conectar TikTok</button></div>
             <div className="field full"><label>Roteiro</label><textarea value={script} onChange={(e)=>setScript(e.target.value)} placeholder="O roteiro aparecerá aqui..." /></div>
           </div>
@@ -62,7 +101,7 @@ export default function Home() {
         <aside className="card">
           <h2>Preview</h2><div className="muted">Prévia conceitual do vídeo vertical.</div>
           <div className="video"><div className="caption">{hook}</div></div>
-          <button className="btn secondary" style={{width:'100%'}} onClick={()=>setStatus('Renderização ficará ativa quando o worker FFmpeg for conectado.')}>Renderizar MP4</button>
+          <button className="btn secondary" style={{width:'100%'}} onClick={renderVideo} disabled={rendering}>{rendering ? 'Renderizando…' : 'Renderizar MP4'}</button>
         </aside>
       </section>
     </main>
