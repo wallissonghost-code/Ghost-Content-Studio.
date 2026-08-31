@@ -2,13 +2,15 @@
 
 import { useMemo, useState } from 'react';
 
-type Scene = { title: string; text: string; seconds: number };
+type Narration = 'none' | 'male' | 'female';
+type Scene = { title: string; text: string; seconds: number; imageUrl?: string };
 
 export default function Home() {
   const [niche, setNiche] = useState('Mistérios');
   const [topic, setTopic] = useState('Uma gravação encontrada em uma casa abandonada');
   const [duration, setDuration] = useState(45);
   const [tone, setTone] = useState('Suspense');
+  const [narration, setNarration] = useState<Narration>('none');
   const [script, setScript] = useState('');
   const [scenes, setScenes] = useState<Scene[]>([]);
   const [status, setStatus] = useState('Pronto para criar.');
@@ -26,7 +28,11 @@ export default function Home() {
     ];
     setScenes(blocks);
     setScript(blocks.map((s) => `${s.title}: ${s.text}`).join('\n\n'));
-    setStatus('Roteiro criado. Já pode renderizar o MP4.');
+    setStatus('Roteiro criado. Adicione imagens às cenas se quiser e renderize o MP4.');
+  }
+
+  function updateSceneImage(index: number, imageUrl: string) {
+    setScenes((current) => current.map((scene, sceneIndex) => sceneIndex === index ? { ...scene, imageUrl } : scene));
   }
 
   async function connectTikTok() {
@@ -41,13 +47,13 @@ export default function Home() {
     }
 
     setRendering(true);
-    setStatus('Renderizando vídeo 1080×1920 com FFmpeg...');
+    setStatus(narration === 'none' ? 'Renderizando vídeo 1080×1920...' : 'Gerando narração e renderizando vídeo 1080×1920...');
 
     try {
       const response = await fetch('/api/render', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ topic, scenes }),
+        body: JSON.stringify({ topic, scenes, narration }),
       });
 
       if (!response.ok) {
@@ -55,6 +61,7 @@ export default function Home() {
         throw new Error(error.error || 'Falha na renderização.');
       }
 
+      const narrationEnabled = response.headers.get('X-Ghost-Narration') === 'enabled';
       const blob = await response.blob();
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement('a');
@@ -64,7 +71,12 @@ export default function Home() {
       anchor.click();
       anchor.remove();
       URL.revokeObjectURL(url);
-      setStatus('MP4 renderizado com sucesso. Arquivo enviado para download.');
+
+      if (narration !== 'none' && !narrationEnabled) {
+        setStatus('MP4 gerado. A voz não entrou porque a chave/voice ID do ElevenLabs ainda não está configurada no servidor.');
+      } else {
+        setStatus(narrationEnabled ? 'MP4 com narração renderizado com sucesso.' : 'MP4 renderizado com sucesso.');
+      }
     } catch (error) {
       setStatus(error instanceof Error ? error.message : 'Falha ao renderizar o vídeo.');
     } finally {
@@ -84,18 +96,18 @@ export default function Home() {
 
       <section className="grid">
         <div className="card">
-          <div className="row"><div><h2>Novo vídeo</h2><div className="muted">Monte o briefing e gere a estrutura do conteúdo.</div></div><span className="badge">9:16 · 1080×1920</span></div>
+          <div className="row"><div><h2>Novo vídeo</h2><div className="muted">Monte o briefing, cenas, mídia e voz.</div></div><span className="badge">9:16 · 1080×1920</span></div>
           <div className="form">
             <div className="field"><label>Nicho</label><select value={niche} onChange={(e)=>setNiche(e.target.value)}><option>Mistérios</option><option>Curiosidades</option><option>Futebol</option><option>Tecnologia</option><option>Histórias</option></select></div>
             <div className="field"><label>Estilo</label><select value={tone} onChange={(e)=>setTone(e.target.value)}><option>Suspense</option><option>Rápido</option><option>Documental</option><option>Emocional</option><option>Impactante</option></select></div>
             <div className="field full"><label>Tema</label><input value={topic} onChange={(e)=>setTopic(e.target.value)} placeholder="Digite o assunto do vídeo" /></div>
             <div className="field"><label>Duração</label><select value={duration} onChange={(e)=>setDuration(Number(e.target.value))}><option value={30}>30 segundos</option><option value={45}>45 segundos</option><option value={60}>60 segundos</option><option value={90}>90 segundos</option></select></div>
-            <div className="field"><label>Narração</label><select defaultValue="Somente legenda"><option>Somente legenda</option><option disabled>Masculina natural · próxima etapa</option><option disabled>Feminina natural · próxima etapa</option></select></div>
+            <div className="field"><label>Narração</label><select value={narration} onChange={(e)=>setNarration(e.target.value as Narration)}><option value="none">Somente legenda</option><option value="male">Masculina natural</option><option value="female">Feminina natural</option></select></div>
             <div className="actions"><button className="btn primary" onClick={generate}>Gerar roteiro</button><button className="btn secondary" onClick={connectTikTok}>Conectar TikTok</button></div>
             <div className="field full"><label>Roteiro</label><textarea value={script} onChange={(e)=>setScript(e.target.value)} placeholder="O roteiro aparecerá aqui..." /></div>
           </div>
           <div className="status">{status}</div>
-          <div className="timeline">{scenes.map((scene,i)=><div className="scene" key={`${scene.title}-${i}`}><strong>{String(i+1).padStart(2,'0')} · {scene.title}</strong><div>{scene.text}</div><small>{scene.seconds}s · {tone}</small></div>)}</div>
+          <div className="timeline">{scenes.map((scene,i)=><div className="scene" key={`${scene.title}-${i}`}><strong>{String(i+1).padStart(2,'0')} · {scene.title}</strong><div>{scene.text}</div><small>{scene.seconds}s · {tone}</small><div className="field" style={{marginTop:10}}><label>Imagem da cena · URL HTTPS opcional</label><input value={scene.imageUrl || ''} onChange={(e)=>updateSceneImage(i,e.target.value)} placeholder="https://.../imagem.jpg" /></div></div>)}</div>
         </div>
 
         <aside className="card">
