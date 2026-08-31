@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Ghost Content Studio</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#0b0d12;color:#f4f4f5;font-family:Inter,Arial,sans-serif}.wrap{max-width:1180px;margin:auto;padding:24px}.top{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:22px}.brand{font-size:22px;font-weight:900;letter-spacing:.08em}.sub{color:#a1a1aa}.online{background:#16351f;color:#86efac;padding:7px 11px;border-radius:999px;font-size:12px}.grid{display:grid;grid-template-columns:1.45fr .7fr;gap:20px}.card{background:#141821;border:1px solid #2b3140;border-radius:20px;padding:20px}.form{display:grid;grid-template-columns:1fr 1fr;gap:14px}.full{grid-column:1/-1}label{display:block;font-size:12px;color:#a1a1aa;margin-bottom:6px}input,select,textarea{width:100%;padding:12px;border-radius:12px;border:1px solid #303747;background:#0f131a;color:#fff}textarea{min-height:180px;resize:vertical}.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:6px}.btn{border:0;border-radius:12px;padding:12px 16px;font-weight:800;cursor:pointer}.primary{background:#fff;color:#0b0d12}.secondary{background:#242b38;color:#fff}.status{margin-top:14px;padding:12px;background:#0f131a;border:1px solid #252b36;border-radius:12px;color:#cbd5e1}.scene{padding:14px 0;border-top:1px solid #2a303b}.scene small{color:#a1a1aa}.preview{aspect-ratio:9/16;border-radius:18px;background:radial-gradient(circle at 50% 15%,#3a4055,#161a23 55%,#090b10);display:flex;align-items:flex-end;padding:26px;overflow:hidden;max-height:620px}.caption{font-size:24px;font-weight:900;text-shadow:0 4px 22px #000}.badge{display:inline-block;padding:6px 9px;border-radius:999px;background:#202735;color:#cbd5e1;font-size:12px}.note{font-size:12px;color:#a1a1aa;margin-top:10px;line-height:1.5}@media(max-width:860px){.grid{grid-template-columns:1fr}.form{grid-template-columns:1fr}.full{grid-column:auto}.wrap{padding:14px}.brand{font-size:18px}}
+</style>
+</head>
+<body>
+<main class="wrap">
+<header class="top"><div><div class="brand">GHOST CONTENT STUDIO</div><div class="sub">Crie o roteiro no Pages e renderize o MP4 no GitHub Actions</div></div><span class="online">ONLINE</span></header>
+<section class="grid">
+<div class="card">
+<div style="display:flex;justify-content:space-between;gap:12px;align-items:center"><div><h2 style="margin:0 0 4px">Novo vídeo</h2><div class="sub">Briefing, roteiro e cenas.</div></div><span class="badge">9:16 · 1080×1920</span></div>
+<div class="form" style="margin-top:18px">
+<div><label>Nicho</label><select id="niche"><option>Mistérios</option><option>Curiosidades</option><option>Futebol</option><option>Tecnologia</option><option>Histórias</option></select></div>
+<div><label>Estilo</label><select id="tone"><option>Suspense</option><option>Rápido</option><option>Documental</option><option>Emocional</option><option>Impactante</option></select></div>
+<div class="full"><label>Tema</label><input id="topic" value="Uma gravação encontrada em uma casa abandonada"></div>
+<div><label>Duração</label><select id="duration"><option value="30">30 segundos</option><option value="45" selected>45 segundos</option><option value="60">60 segundos</option><option value="90">90 segundos</option></select></div>
+<div><label>Narração</label><select id="voice"><option>Somente legenda</option><option>Masculina natural</option><option>Feminina natural</option></select></div>
+<div class="full actions"><button class="btn primary" onclick="generate()">Gerar roteiro</button><button class="btn secondary" onclick="render()">Gerar MP4</button></div>
+<div class="full"><label>Roteiro</label><textarea id="script"></textarea></div>
+</div>
+<div class="status" id="status">Pronto para criar.</div><div id="timeline"></div>
+</div>
+<aside class="card"><h2 style="margin-top:0">Preview</h2><div class="sub" style="margin-bottom:14px">Prévia conceitual vertical.</div><div class="preview"><div class="caption" id="preview"></div></div><button class="btn secondary" style="width:100%;margin-top:14px" onclick="openRuns()">Abrir vídeos gerados</button><div class="note">O GitHub Pages é estático. O FFmpeg roda com segurança no GitHub Actions usando o secret PEXELS_API_KEY.</div></aside>
+</section>
+</main>
+<script>
+const workflow='https://github.com/wallissonghost-code/Ghost-Content-Studio./actions/workflows/generate-video.yml';
+const runs='https://github.com/wallissonghost-code/Ghost-Content-Studio./actions';
+function generate(){const t=document.getElementById('topic').value.trim()||'Tema do vídeo';const n=document.getElementById('niche').value;const tone=document.getElementById('tone').value;const d=+document.getElementById('duration').value;const s=[['Gancho',`Você teria coragem de descobrir o que aconteceu? ${t}.`,4],['Contexto',`Tudo começa com um detalhe aparentemente comum dentro de ${n.toLowerCase()}, mas algo não parece certo.`,Math.max(7,Math.round(d*.22))],['Escalada','Os sinais ficam cada vez mais estranhos e o clima muda completamente.',Math.max(8,Math.round(d*.28))],['Revelação','Então surge o detalhe que muda a interpretação de toda a história.',Math.max(8,Math.round(d*.25))],['CTA','Você continuaria investigando? Comenta o que faria.',5]];document.getElementById('script').value=s.map(x=>`${x[0]}: ${x[1]}`).join('\n\n');document.getElementById('preview').textContent=t;document.getElementById('timeline').innerHTML=s.map((x,i)=>`<div class="scene"><strong>${String(i+1).padStart(2,'0')} · ${x[0]}</strong><div>${x[1]}</div><small>${x[2]}s · ${tone}</small></div>`).join('');document.getElementById('status').textContent='Roteiro criado. Clique em “Gerar MP4”.';localStorage.setItem('ghost-topic',t)}
+function render(){generate();document.getElementById('status').textContent='Abrindo o GitHub Actions para renderizar o MP4.';window.open(workflow,'_blank')}
+function openRuns(){window.open(runs,'_blank')}
+const saved=localStorage.getItem('ghost-topic');if(saved)document.getElementById('topic').value=saved;generate();
+</script>
+</body>
+</html>
